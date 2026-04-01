@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>N1~N5 학교 지도</title>
+  <script type="text/javascript" nonce="628757535b574b7eb112b858537" src="//local.adguard.org?ts=1775032326294&amp;type=content-script&amp;dmn=chatgpt.com&amp;url=https%3A%2F%2Fchatgpt.com%2Fbackend-api%2Festuary%2Fcontent%3Fid%3Dfile_000000008938720684afe668e1d9614a%26ts%3D493065%26p%3Dfs%26cid%3D1%26sig%3D8047dee1681a0ec5d03ef9ddda02526f0a8219197667d2c37e9c9d20f53d330e%26v%3D0&amp;app=whale.exe&amp;css=2&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0&amp;stealth=1&amp;st-push"></script><script type="text/javascript" nonce="628757535b574b7eb112b858537" src="//local.adguard.org?ts=1775032326294&amp;name=Disable%20AMP&amp;type=user-script"></script><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <style>
+    html, body { margin:0; padding:0; height:100%; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif; }
+    #map { height:100vh; width:100%; background:#f8fafc; }
+    .panel {
+      position:absolute; left:12px; top:12px; z-index:1000; width:min(390px, calc(100vw - 24px));
+      max-height:calc(100vh - 24px); overflow:auto; background:rgba(255,255,255,0.96);
+      border:1px solid rgba(0,0,0,0.08); border-radius:18px; box-shadow:0 10px 28px rgba(0,0,0,0.14);
+    }
+    .panel-inner { padding:14px; }
+    .title { font-size:18px; font-weight:800; margin-bottom:6px; }
+    .sub { font-size:12px; color:#4b5563; line-height:1.5; margin-bottom:12px; }
+    .box { background:#f8fafc; border:1px solid #e5e7eb; border-radius:14px; padding:10px 12px; margin-bottom:10px; }
+    .label { font-size:12px; font-weight:800; margin-bottom:8px; color:#374151; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; background:#fff; }
+    .chip input { margin:0; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    button {
+      border:1px solid #d1d5db; border-radius:10px; background:white; padding:8px 10px; font-size:12px; font-weight:700; cursor:pointer;
+    }
+    button:hover { background:#f9fafb; }
+    input[type=text] {
+      width:100%; box-sizing:border-box; border:1px solid #d1d5db; border-radius:10px; padding:9px 10px; font-size:13px;
+    }
+    .status { font-size:12px; line-height:1.55; white-space:pre-line; }
+    .small { font-size:11px; color:#6b7280; line-height:1.5; }
+    .list { max-height:180px; overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
+    .item { padding:8px 10px; border-bottom:1px solid #f3f4f6; font-size:12px; line-height:1.5; }
+    .item:last-child { border-bottom:none; }
+    .badge {
+      display:inline-block; font-size:11px; font-weight:800; border-radius:999px; padding:2px 7px; color:white; margin-right:4px;
+    }
+    .muted { color:#6b7280; }
+    .legend {
+      position:absolute; right:12px; bottom:12px; z-index:1000; background:rgba(255,255,255,0.95);
+      border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:10px 12px; font-size:12px; line-height:1.6;
+      box-shadow:0 8px 22px rgba(0,0,0,0.1);
+    }
+    .legend-title { font-weight:800; margin-bottom:6px; }
+    .popup-title { font-size:14px; font-weight:800; margin-bottom:6px; }
+    .leaflet-popup-content { font-size:13px; line-height:1.55; }
+    @media (max-width:860px) {
+      .panel { width:min(100vw - 24px, 440px); max-height:44vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="panel">
+    <div class="panel-inner">
+      <div class="title">N1~N5 학교 지도</div>
+      <div class="sub">
+        집 위치는 제외했습니다. 학교명과 N등급만 표시됩니다.
+      </div>
+
+      <div class="box">
+        <div class="label">N 그룹</div>
+        <div class="chips" id="groupFilters"></div>
+      </div>
+
+      <div class="box">
+        <div class="label">지역</div>
+        <div class="chips" id="cityFilters"></div>
+      </div>
+
+      <div class="box">
+        <div class="label">검색</div>
+        <input id="searchInput" type="text" placeholder="학교명, 지역, 구/시 이름 검색" />
+        <div class="toolbar">
+          <button id="selectAllBtn">전체 표시</button>
+          <button id="hideAllBtn">전체 숨김</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="label">상태</div>
+        <div class="status" id="statusBox">준비됨</div>
+        <div class="small" style="margin-top:6px;">
+          같은 브라우저에서는 찾은 위치를 저장해서 다음부터 더 빨리 보입니다.
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="label">현재 보이는 학교</div>
+        <div class="list" id="visibleList"></div>
+      </div>
+
+      <div class="box">
+        <div class="label">위치 미확인</div>
+        <div class="list" id="missingList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-title">범례</div>
+    <div><span class="dot" style="background:#2563eb"></span> N1</div>
+    <div><span class="dot" style="background:#16a34a"></span> N2</div>
+    <div><span class="dot" style="background:#f59e0b"></span> N3</div>
+    <div><span class="dot" style="background:#dc2626"></span> N4</div>
+    <div><span class="dot" style="background:#7c3aed"></span> N5</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    const schools = [
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "가락중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "강현중학교",
+    "district": "동작구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "당산서중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "등명중학교",
+    "district": "강서구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "문래중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "상계고등학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "서일중학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "신목중학교",
+    "district": "양천구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "양진중학교",
+    "district": "광진구",
+    "manualAddress": "서울 광진구 워커힐로 32",
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "원촌중학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "월촌중학교",
+    "district": "양천구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "종암중학교",
+    "district": "성북구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "중산고등학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "청량고등학교",
+    "district": "동대문구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "태릉고등학교",
+    "district": "중랑구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "하계중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N1",
+    "name": "한산중학교",
+    "district": "강동구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "구암중학교",
+    "district": "관악구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "개원중학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "경인중학교",
+    "district": "구로구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "고덕중학교",
+    "district": "강동구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "도곡중학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "마곡하늬중학교",
+    "district": "강서구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "목일중학교",
+    "district": "양천구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "방배중학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "석촌중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "성남고등학교",
+    "district": "동작구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "숭곡중학교",
+    "district": "성북구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "양재고등학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "여의도중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "오주중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "온곡중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "장승중학교",
+    "district": "동작구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "중평중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N2",
+    "name": "증산중학교",
+    "district": "은평구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "가원중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "강명중학교",
+    "district": "강동구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "경기기계공업고등학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "공릉중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "광양중학교",
+    "district": "광진구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "구로중학교",
+    "district": "구로구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "구룡중학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "무학중학교",
+    "district": "성동구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "방산고등학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "백석중학교",
+    "district": "강서구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "봉원중학교",
+    "district": "관악구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "상경중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "서운중학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "서울공업고등학교",
+    "district": "동작구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "신서중학교",
+    "district": "양천구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "양동중학교",
+    "district": "양천구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "언북중학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "연희중학교",
+    "district": "서대문구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "영원중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "인왕중학교",
+    "district": "서대문구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "중암중학교",
+    "district": "마포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N3",
+    "name": "진관중학교",
+    "district": "은평구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "개포고등학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "남대문중학교",
+    "district": "성북구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "대방중학교",
+    "district": "동작구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "불광중학교",
+    "district": "은평구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "선린인터넷고등학교",
+    "district": "용산구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "성서중학교",
+    "district": "마포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "송파중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "양화중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "언남고등학교",
+    "district": "서초구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "윤중중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N4",
+    "name": "중계중학교",
+    "district": "노원구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "대왕중학교",
+    "district": "강남구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "대림중학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "여의도고등학교",
+    "district": "영등포구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "오금중학교",
+    "district": "송파구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "인헌중학교",
+    "district": "관악구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "자양중학교",
+    "district": "광진구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "장안중학교",
+    "district": "중랑구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "서울",
+    "group": "N5",
+    "name": "창일중학교",
+    "district": "도봉구",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N1",
+    "name": "인천미래생활고등학교",
+    "district": "인천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N1",
+    "name": "한국주얼리고등학교",
+    "district": "인천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N2",
+    "name": "옥련중학교",
+    "district": "인천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N2",
+    "name": "인천바이오과학고등학교",
+    "district": "인천",
+    "manualAddress": "인천 연수구 용담로 12",
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N3",
+    "name": "청천중학교",
+    "district": "인천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N3",
+    "name": "인천부흥중학교",
+    "district": "인천",
+    "manualAddress": "인천 부평구 충선로 152",
+    "fallbackName": null
+  },
+  {
+    "city": "인천",
+    "group": "N4",
+    "name": "인천반도체고등학교",
+    "district": "인천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "수원",
+    "group": "N1",
+    "name": "수원정보과학고등학교",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "수원",
+    "group": "N1",
+    "name": "동남보건대학교 사담기념관",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": "동남보건대학교"
+  },
+  {
+    "city": "수원",
+    "group": "N2",
+    "name": "원천중학교",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "수원",
+    "group": "N2",
+    "name": "동남보건대학교 동남관",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": "동남보건대학교"
+  },
+  {
+    "city": "수원",
+    "group": "N3",
+    "name": "동남보건대학교 해운관",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": "동남보건대학교"
+  },
+  {
+    "city": "수원",
+    "group": "N4",
+    "name": "동남보건대학교 학리관",
+    "district": "수원",
+    "manualAddress": null,
+    "fallbackName": "동남보건대학교"
+  },
+  {
+    "city": "성남",
+    "group": "N1",
+    "name": "불곡고등학교",
+    "district": "성남",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "성남",
+    "group": "N2",
+    "name": "동서울대학교 10호관",
+    "district": "성남",
+    "manualAddress": null,
+    "fallbackName": "동서울대학교"
+  },
+  {
+    "city": "성남",
+    "group": "N3",
+    "name": "한솔고등학교",
+    "district": "성남",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "안양",
+    "group": "N1",
+    "name": "안양공업고등학교",
+    "district": "안양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "안양",
+    "group": "N2",
+    "name": "성결대학교 중생관",
+    "district": "안양",
+    "manualAddress": null,
+    "fallbackName": "성결대학교"
+  },
+  {
+    "city": "안양",
+    "group": "N3",
+    "name": "양명여자고등학교",
+    "district": "안양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "고양",
+    "group": "N1",
+    "name": "덕이고등학교",
+    "district": "고양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "고양",
+    "group": "N2",
+    "name": "일산국제컨벤션고등학교",
+    "district": "고양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "고양",
+    "group": "N3",
+    "name": "신일중학교",
+    "district": "고양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "고양",
+    "group": "N4",
+    "name": "저동중학교",
+    "district": "고양",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "부천",
+    "group": "N1",
+    "name": "부천일신중학교",
+    "district": "부천",
+    "manualAddress": null,
+    "fallbackName": null
+  },
+  {
+    "city": "부천",
+    "group": "N2",
+    "name": "경기경영고등학교",
+    "district": "부천",
+    "manualAddress": "경기 부천시 소사구 심곡로 100",
+    "fallbackName": null
+  },
+  {
+    "city": "부천",
+    "group": "N3",
+    "name": "부천상도중학교",
+    "district": "부천",
+    "manualAddress": null,
+    "fallbackName": null
+  }
+];
+    const groupOrder = ["N1","N2","N3","N4","N5"];
+    const cityOrder = ["서울","인천","수원","성남","안양","고양","부천"];
+    const groupColors = { N1:"#2563eb", N2:"#16a34a", N3:"#f59e0b", N4:"#dc2626", N5:"#7c3aed" };
+    const areaNameByCity = {
+      "서울":"서울특별시", "인천":"인천광역시", "수원":"수원시",
+      "성남":"성남시", "안양":"안양시", "고양":"고양시", "부천":"부천시"
+    };
+
+    const map = L.map("map", { preferCanvas:true }).setView([37.47, 126.98], 10);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const state = {
+      groupFilter: Object.fromEntries(groupOrder.map(g => [g, true])),
+      cityFilter: Object.fromEntries(cityOrder.map(c => [c, true])),
+      searchText: "",
+      markers: new Map(),
+      missing: new Map(),
+      loading: false
+    };
+
+    const CACHE_KEY = "school_map_coords_v3";
+    let cache = {};
+    try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch (e) { cache = {}; }
+
+    const groupFiltersEl = document.getElementById("groupFilters");
+    const cityFiltersEl = document.getElementById("cityFilters");
+    const statusBox = document.getElementById("statusBox");
+    const visibleList = document.getElementById("visibleList");
+    const missingList = document.getElementById("missingList");
+    const searchInput = document.getElementById("searchInput");
+
+    function keyOf(item) {
+      return `${item.city}|${item.group}|${item.name}|${item.district}`;
+    }
+
+    function badge(group) {
+      return `<span class="badge" style="background:${groupColors[group]}">${group}</span>`;
+    }
+
+    function esc(text) {
+      return String(text).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+    }
+
+    function visibleByFilters(item) {
+      const q = state.searchText.trim().toLowerCase();
+      const hay = `${item.city} ${item.group} ${item.name} ${item.district}`.toLowerCase();
+      return !!state.groupFilter[item.group] && !!state.cityFilter[item.city] && (!q || hay.includes(q));
+    }
+
+    function markerStyle(item, highlighted=false) {
+      return {
+        radius: highlighted ? 9 : 7,
+        color: groupColors[item.group],
+        weight: highlighted ? 3 : 2,
+        fillColor: groupColors[item.group],
+        fillOpacity: highlighted ? 0.5 : 0.25
+      };
+    }
+
+    function popupHtml(item, lat, lon, source) {
+      const q = encodeURIComponent((item.manualAddress || `${item.name} ${item.city}`).trim());
+      return `
+        <div class="popup-title">${esc(item.name)}</div>
+        <div>${badge(item.group)} ${esc(item.city)} / ${esc(item.district)}</div>
+        <div><b>좌표</b> ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
+        <div class="muted"><b>위치 확인</b> ${esc(source)}</div>
+        <div style="margin-top:6px;"><a href="https://map.naver.com/p/search/${q}" target="_blank" rel="noopener noreferrer">네이버지도 검색</a></div>
+      `;
+    }
+
+    function addMarker(item, lat, lon, source) {
+      const key = keyOf(item);
+      if (state.markers.has(key)) return;
+      const marker = L.circleMarker([lat, lon], markerStyle(item));
+      marker._item = item;
+      marker._lat = lat;
+      marker._lon = lon;
+      marker.bindPopup(popupHtml(item, lat, lon, source), {maxWidth:280});
+      state.markers.set(key, marker);
+      if (visibleByFilters(item)) marker.addTo(map);
+    }
+
+    function removeAllVisibleMarkers() {
+      state.markers.forEach(marker => { if (map.hasLayer(marker)) map.removeLayer(marker); });
+    }
+
+    function applyFilters() {
+      state.markers.forEach(marker => {
+        const show = visibleByFilters(marker._item);
+        if (show && !map.hasLayer(marker)) marker.addTo(map);
+        if (!show && map.hasLayer(marker)) map.removeLayer(marker);
+        marker.setStyle(markerStyle(marker._item, !!state.searchText.trim() && show));
+      });
+      renderVisibleList();
+    }
+
+    function renderVisibleList() {
+      const items = schools.filter(visibleByFilters).sort((a,b) =>
+        a.group.localeCompare(b.group) || a.city.localeCompare(b.city) || a.name.localeCompare(b.name)
+      );
+      if (!items.length) {
+        visibleList.innerHTML = '<div class="item">현재 조건에 맞는 학교가 없습니다.</div>';
+        return;
+      }
+      visibleList.innerHTML = items.map(item => {
+        const located = state.markers.has(keyOf(item));
+        return `<div class="item">${badge(item.group)} <b>${esc(item.name)}</b><br><span class="muted">${esc(item.city)} / ${esc(item.district)} · ${located ? "위치 있음" : "위치 확인 중/없음"}</span></div>`;
+      }).join("");
+    }
+
+    function renderMissingList() {
+      const vals = [...state.missing.values()];
+      if (!vals.length) {
+        missingList.innerHTML = '<div class="item">없음</div>';
+        return;
+      }
+      missingList.innerHTML = vals.map(item => `<div class="item">${badge(item.group)} <b>${esc(item.name)}</b><br><span class="muted">${esc(item.city)} / ${esc(item.district)}</span>${item.manualAddress ? `<br><span class="muted">${esc(item.manualAddress)}</span>` : ""}</div>`).join("");
+    }
+    function updateStatus(text) { statusBox.textContent = text; }
+
+    function aliasQueries(item) {
+      return [
+        item.manualAddress,
+        item.name + " " + item.city + " " + item.district + " 대한민국",
+        item.name + " " + item.city + " 대한민국",
+        item.fallbackName ? item.fallbackName + " " + item.city + " 대한민국" : null
+      ].filter(Boolean);
+    }
+
+    async function fetchOverpassBatch(items, city) {
+      const names = [...new Set(items.flatMap(item => [item.name, item.fallbackName].filter(Boolean)))];
+      const lookup = names.flatMap(name => [
+        `node(area.searchArea)["name"="${name}"];`,
+        `way(area.searchArea)["name"="${name}"];`,
+        `relation(area.searchArea)["name"="${name}"];`
+      ]).join("\n");
+      const query = `
+[out:json][timeout:60];
+area["boundary"="administrative"]["name"="${areaNameByCity[city]}"]->.searchArea;
+(
+${lookup}
+);
+out center tags;
+      `.trim();
+      const res = await fetch("https://overpass-api.de/api/interpreter", {
+        method:"POST",
+        headers:{"Content-Type":"text/plain;charset=UTF-8"},
+        body: query
+      });
+      if (!res.ok) throw new Error("overpass");
+      const data = await res.json();
+      const buckets = new Map();
+      (data.elements || []).forEach(el => {
+        const name = el.tags && el.tags.name;
+        const lat = el.lat ?? (el.center && el.center.lat);
+        const lon = el.lon ?? (el.center && el.center.lon);
+        if (!name || typeof lat !== "number" || typeof lon !== "number") return;
+        if (!buckets.has(name)) buckets.set(name, []);
+        buckets.get(name).push({ lat, lon, tags: el.tags || {} });
+      });
+      return buckets;
+    }
+
+    function scoreCandidate(item, alias, cand) {
+      let score = 0;
+      if (alias === item.name) score += 100;
+      if (cand.tags.amenity === "school" || cand.tags.building === "school") score += 25;
+      if (cand.tags.amenity === "university") score += 15;
+      const joined = Object.values(cand.tags).join(" ");
+      if (item.city && joined.includes(item.city)) score += 6;
+      if (item.district && joined.includes(item.district)) score += 8;
+      if (item.manualAddress && joined.includes(item.manualAddress.split(" ").slice(-1)[0])) score += 4;
+      return score;
+    }
+
+    async function fetchNominatim(item) {
+      for (const q of aliasQueries(item)) {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=kr&limit=1&accept-language=ko&q=${encodeURIComponent(q)}`;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) {
+            return { lat:Number(data[0].lat), lon:Number(data[0].lon), source:item.manualAddress === q ? "수동 주소 검색" : "이름 검색" };
+          }
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 700));
+      }
+      return null;
+    }
+
+    async function loadVisibleSchools() {
+      if (state.loading) return;
+      const targets = schools;
+      if (!targets.length) {
+        updateStatus("불러올 학교가 없습니다.");
+        return;
+      }
+
+      state.loading = true;
+      state.missing.clear();
+
+      let loadedFromCache = 0;
+      for (const item of targets) {
+        const key = keyOf(item);
+        const cached = cache[key];
+        if (cached && typeof cached.lat === "number" && typeof cached.lon === "number") {
+          addMarker(item, cached.lat, cached.lon, cached.source || "캐시");
+          loadedFromCache += 1;
+        }
+      }
+      applyFilters();
+      updateStatus(`대상 ${targets.length}개 중 캐시 ${loadedFromCache}개 적용. 나머지 위치를 찾는 중…`);
+
+      const cityMap = new Map();
+      targets.filter(item => !state.markers.has(keyOf(item))).forEach(item => {
+        if (!cityMap.has(item.city)) cityMap.set(item.city, []);
+        cityMap.get(item.city).push(item);
+      });
+
+      let processed = loadedFromCache;
+      for (const [city, items] of cityMap.entries()) {
+        let bucket = new Map();
+        try {
+          bucket = await fetchOverpassBatch(items, city);
+        } catch (e) {}
+
+        for (const item of items) {
+          let best = null;
+          for (const alias of [item.name, item.fallbackName].filter(Boolean)) {
+            const candidates = bucket.get(alias) || [];
+            for (const cand of candidates) {
+              const score = scoreCandidate(item, alias, cand);
+              if (!best || score > best.score) best = {...cand, score, source:"지도 이름 매칭"};
+            }
+          }
+
+          if (!best) best = await fetchNominatim(item);
+
+          if (best && Number.isFinite(best.lat) && Number.isFinite(best.lon)) {
+            addMarker(item, best.lat, best.lon, best.source || "자동");
+            cache[keyOf(item)] = { lat: best.lat, lon: best.lon, source: best.source || "자동" };
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
+          } else {
+            state.missing.set(keyOf(item), item);
+          }
+
+          processed += 1;
+          updateStatus(`위치 확인 중… ${processed} / ${targets.length}`);
+          applyFilters();
+          renderMissingList();
+        }
+      }
+
+      state.loading = false;
+      const located = schools.filter(item => state.markers.has(keyOf(item))).length;
+      updateStatus(`완료. 현재 좌표 저장됨: ${located}개 / 이번 조회 대상: ${targets.length}개 / 미확인: ${state.missing.size}개`);
+      renderMissingList();
+      applyFilters();
+      const pts = [];
+      state.markers.forEach(marker => { pts.push([marker._lat, marker._lon]); });
+      if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.15));
+    }
+
+    function buildFilters() {
+      groupOrder.forEach(group => {
+        const count = schools.filter(s => s.group === group).length;
+        const label = document.createElement("label");
+        label.className = "chip";
+        label.innerHTML = `<input type="checkbox" data-kind="group" data-value="${group}" checked><span class="dot" style="background:${groupColors[group]}"></span><span>${group} (${count})</span>`;
+        groupFiltersEl.appendChild(label);
+      });
+      cityOrder.forEach(city => {
+        const count = schools.filter(s => s.city === city).length;
+        const label = document.createElement("label");
+        label.className = "chip";
+        label.innerHTML = `<input type="checkbox" data-kind="city" data-value="${city}" checked><span>${city} (${count})</span>`;
+        cityFiltersEl.appendChild(label);
+      });
+
+      document.querySelectorAll('input[data-kind="group"]').forEach(el => el.addEventListener("change", e => {
+        state.groupFilter[e.target.dataset.value] = e.target.checked; applyFilters();
+      }));
+      document.querySelectorAll('input[data-kind="city"]').forEach(el => el.addEventListener("change", e => {
+        state.cityFilter[e.target.dataset.value] = e.target.checked; applyFilters();
+      }));
+    }
+
+    buildFilters();
+    renderVisibleList();
+    renderMissingList();
+
+    searchInput.addEventListener("input", e => {
+      state.searchText = e.target.value || "";
+      applyFilters();
+    });
+
+    document.getElementById("selectAllBtn").addEventListener("click", () => {
+      document.querySelectorAll('input[data-kind="group"], input[data-kind="city"]').forEach(el => {
+        el.checked = true;
+        if (el.dataset.kind === "group") state.groupFilter[el.dataset.value] = true;
+        if (el.dataset.kind === "city") state.cityFilter[el.dataset.value] = true;
+      });
+      applyFilters();
+    });
+    document.getElementById("hideAllBtn").addEventListener("click", () => {
+      document.querySelectorAll('input[data-kind="group"], input[data-kind="city"]').forEach(el => {
+        el.checked = false;
+        if (el.dataset.kind === "group") state.groupFilter[el.dataset.value] = false;
+        if (el.dataset.kind === "city") state.cityFilter[el.dataset.value] = false;
+      });
+      applyFilters();
+    });
+
+    updateStatus("학교 위치를 불러오는 중입니다.");
+    loadVisibleSchools();
+  </script>
+</body>
+</html>
